@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>La roulette des questions · LudoDays 2026</title>
+<style>
+ :root{--navy:#2E3176;--teal:#26C6C6;--lime:#96CD32;--bg:#ffffff;--card:#E1F5EE;--ink:#1d2160;--muted:#4b5093;--accent:#0fb3b3;
+       box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+ @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12143a;--card:#1f2360;--ink:#f2f4ff;--muted:#b9bfe8;--accent:#26C6C6}}
+ :root[data-theme="dark"]{--bg:#12143a;--card:#1f2360;--ink:#f2f4ff;--muted:#b9bfe8;--accent:#26C6C6}
+ *,*::before,*::after{box-sizing:border-box}
+ html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+ body{height:100%;margin:0;font-family:"Segoe UI",Calibri,Carlito,Arial,sans-serif;background:var(--bg);color:var(--ink);
+      display:flex;flex-direction:column;min-height:100%;-webkit-text-size-adjust:100%}
+ header{padding:16px 20px 0}
+ h1{margin:0;font-size:clamp(22px,3.2vw,40px)}
+ .sub{margin:4px 0 0;font-style:italic;color:var(--accent);font-size:clamp(14px,1.8vw,22px)}
+ main{flex:1;display:flex;gap:24px;padding:14px 20px;align-items:center;justify-content:center;flex-wrap:wrap}
+ .stage{flex:0 1 auto;display:flex;flex-direction:column;align-items:center;gap:14px;max-width:100%}
+ #wheelWrap{position:relative;width:min(86vw,58vh,560px);aspect-ratio:1/1;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+ canvas{width:100%;height:100%;display:block}
+ .pointer{position:absolute;left:50%;top:-4px;transform:translateX(-50%);width:0;height:0;
+          border-left:18px solid transparent;border-right:18px solid transparent;border-top:34px solid var(--lime);
+          filter:drop-shadow(0 2px 0 var(--navy));z-index:2}
+ button{font:inherit;font-weight:700;font-size:clamp(17px,2vw,24px);border:0;border-radius:14px;min-height:52px;
+        padding:12px 34px;background:var(--navy);color:#fff;cursor:pointer;box-shadow:0 4px 0 #1b1e57;touch-action:manipulation}
+ button:active{transform:translateY(2px);box-shadow:0 2px 0 #1b1e57}
+ button:disabled{opacity:.55;cursor:default}
+ .card{flex:1 1 320px;max-width:640px;min-height:200px;background:var(--card);border-radius:20px;padding:22px 24px;
+       display:flex;flex-direction:column;justify-content:center;gap:12px}
+ .theme{display:inline-block;align-self:flex-start;background:var(--navy);color:#fff;border-radius:999px;
+        padding:6px 16px;font-weight:700;font-size:clamp(14px,1.6vw,20px)}
+ .theme.joker{background:var(--lime);color:#2E3176}
+ .q{font-size:clamp(22px,3.4vw,44px);font-weight:700;line-height:1.2;margin:0;overflow-wrap:anywhere}
+ .hint{font-size:clamp(15px,1.7vw,21px);color:var(--muted);margin:0}
+ .cta{background:var(--teal);color:#1d2160;text-align:center;padding:12px 16px;font-size:clamp(14px,1.7vw,21px);margin:0 20px 16px;border-radius:14px}
+</style>
+</head>
+<body>
+<header>
+<h1>La roulette des questions</h1>
+<p class="sub">Une question tirée au sort, un expert pour y répondre</p>
+</header>
+<main>
+<div class="stage">
+<div id="wheelWrap" role="button" tabindex="0" aria-label="Tourner la roue">
+<div class="pointer"></div>
+<canvas id="wheel"></canvas>
+</div>
+<button id="spin">Tourner la roue</button>
+</div>
+<section class="card" id="card" aria-live="polite">
+<p class="hint" id="hint">Touchez la roue (ou la barre d'espace) : elle choisit votre question.<br>Posez-la ensuite à l'expert de votre choix.</p>
+<span class="theme" id="theme" hidden></span>
+<p class="q" id="question" hidden></p>
+</section>
+</main>
+<p class="cta"><strong>Venez tourner la roue sur le stand !</strong> Les experts vous répondent de vive voix.</p>
+<script>
+(function(){
+ // 8 thèmes = 8 questions (les mêmes que sur la roue imprimée / le slide du support)
+ var ITEMS=[
+   {t:"Le pire bug",       q:"C'est quoi le pire bug (ou la pire panne) de ta carrière, et comment l'as-tu résolu ?"},
+   {t:"L'outil culte",     q:"Quel outil ou quelle techno tu ne pourrais plus lâcher, et pourquoi ?"},
+   {t:"Le déclic",         q:"Quel moment t'a fait dire : « je veux devenir expert » ?"},
+   {t:"L'idée reçue",      q:"Quelle idée reçue sur ton domaine t'agace le plus ?"},
+   {t:"Le conseil",        q:"Quel conseil donnerais-tu à quelqu'un qui débute dans ton domaine ?"},
+   {t:"La fierté",         q:"Quelle réalisation t'a apporté le plus de satisfaction dans ta carrière ?"},
+   {t:"Défi express",      q:"Explique ton métier à un enfant de 10 ans, en 30 secondes."},
+   {t:"Joker",             q:"Pose la question de ton choix à l'expert !", joker:true}
+ ];
+ var N=ITEMS.length, SEG=2*Math.PI/N;
+ var COL=["#2E3176","#26C6C6","#2E3176","#26C6C6","#2E3176","#26C6C6","#2E3176","#96CD32"];
+ var TXT=["#ffffff","#2E3176","#ffffff","#2E3176","#ffffff","#2E3176","#ffffff","#2E3176"];
+ var cv=document.getElementById('wheel'), ctx=cv.getContext('2d');
+ var rot=0, spinning=false, last=-1;              // rot en radians, sens horaire, 0 = segment 0 sous le pointeur
+ var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+ function size(){
+   var r=cv.getBoundingClientRect(), d=Math.max(1,Math.round(r.width*(window.devicePixelRatio||1)));
+   cv.width=d; cv.height=d; draw();
+ }
+ function draw(){
+   var S=cv.width, c=S/2, R=c*0.96;
+   ctx.clearRect(0,0,S,S);
+   ctx.save(); ctx.translate(c,c);
+   // anneau
+   ctx.beginPath(); ctx.arc(0,0,R+S*0.012,0,2*Math.PI); ctx.fillStyle="#2E3176"; ctx.fill();
+   ctx.beginPath(); ctx.arc(0,0,R+S*0.004,0,2*Math.PI); ctx.fillStyle="#fff"; ctx.fill();
+   for(var i=0;i<N;i++){
+     // segment i centré à i*SEG depuis le haut (-90°), puis rotation
+     var a0=-Math.PI/2+rot+i*SEG-SEG/2, a1=a0+SEG;
+     ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,R,a0,a1); ctx.closePath();
+     ctx.fillStyle=COL[i]; ctx.fill();
+     ctx.lineWidth=S*0.005; ctx.strokeStyle="#fff"; ctx.stroke();
+     // libellé radial
+     ctx.save(); ctx.rotate(a0+SEG/2); ctx.textAlign="right"; ctx.textBaseline="middle";
+     ctx.fillStyle=TXT[i]; ctx.font="700 "+Math.round(S*0.058)+"px 'Segoe UI',Calibri,Carlito,Arial,sans-serif";
+     ctx.fillText(ITEMS[i].t,R-S*0.05,0); ctx.restore();
+   }
+   // moyeu
+   ctx.beginPath(); ctx.arc(0,0,S*0.085,0,2*Math.PI); ctx.fillStyle="#2E3176"; ctx.fill();
+   ctx.beginPath(); ctx.arc(0,0,S*0.07,0,2*Math.PI); ctx.fillStyle="#fff"; ctx.fill();
+   ctx.fillStyle="#2E3176"; ctx.font="700 "+Math.round(S*0.1)+"px 'Segoe UI',Calibri,Arial,sans-serif";
+   ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("?",0,S*0.005);
+   ctx.restore();
+ }
+ function show(i){
+   var it=ITEMS[i], th=document.getElementById('theme'), q=document.getElementById('question');
+   document.getElementById('hint').hidden=true;
+   th.hidden=false; q.hidden=false; th.textContent=it.t; q.textContent=it.q;
+   th.className='theme'+(it.joker?' joker':'');
+ }
+ function ease(t){return 1-Math.pow(1-t,3)}
+ function spin(){
+   if(spinning) return;
+   spinning=true; document.getElementById('spin').disabled=true;
+   var idx; do{ idx=Math.floor(Math.random()*N); }while(idx===last && N>1);
+   last=idx;
+   // on veut que le segment idx (centre) soit sous le pointeur : rot ≡ -idx*SEG (mod 2π), avec un léger décalage aléatoire dans le segment
+   var jitter=(Math.random()-0.5)*SEG*0.6;
+   var target=-idx*SEG+jitter;
+   var start=rot, cur=((start%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+   var tgt=((target%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+   var delta=(tgt-cur+2*Math.PI)%(2*Math.PI) + 2*Math.PI*(reduce?1:(5+Math.floor(Math.random()*3)));
+   var dur=reduce?900:4600, t0=null;
+   document.getElementById('theme').hidden=true; document.getElementById('question').hidden=true;
+   document.getElementById('hint').hidden=false; document.getElementById('hint').textContent="…";
+   function step(ts){
+     if(t0===null) t0=ts;
+     var p=Math.min(1,(ts-t0)/dur);
+     rot=start+delta*ease(p); draw();
+     if(p<1){ requestAnimationFrame(step); }
+     else{ spinning=false; document.getElementById('spin').disabled=false;
+           document.getElementById('spin').textContent="Tourner à nouveau"; show(idx); }
+   }
+   requestAnimationFrame(step);
+ }
+ document.getElementById('spin').addEventListener('click',spin);
+ var wrap=document.getElementById('wheelWrap');
+ wrap.addEventListener('click',spin);
+ wrap.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();spin();} });
+ document.addEventListener('keydown',function(e){ if(e.code==='Space' && e.target===document.body){e.preventDefault();spin();} });
+ window.addEventListener('resize',size);
+ size();
+})();
+</script>
+</body>
+</html>
